@@ -22,7 +22,7 @@ It is written in Go and uses the `go.mod` for managing dependencies.
 
 ### Executing program
 
-- Run `go run main.go` (replace `main.go` with your actual main file)
+- Look at the example folder
 
 ## Help
 
