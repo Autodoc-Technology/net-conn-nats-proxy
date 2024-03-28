@@ -1,6 +1,6 @@
 module github.com/Autodoc-Technology/redis-nats-proxy
 
-go 1.22.0
+go 1.21
 
 require (
 	github.com/nats-io/nats.go v1.34.0
