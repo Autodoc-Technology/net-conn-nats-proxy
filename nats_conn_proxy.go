@@ -15,11 +15,21 @@ type NetConnManager interface {
 	Get(addr *net.TCPAddr) (net.Conn, error)
 }
 
-// NatsConnProxy represents a type that proxies network connections over NATS.
+// NatsConnProxy represents a proxy for NATS connections.
+// It is responsible for handling read and write requests from NATS messages and forwarding them to the appropriate network connections.
+// NatsConnProxy uses the NetConnManager interface to manage network connections from a pool or create new ones.
+// The proxy starts handling requests by calling the Start method, which takes a context.Context as a parameter and returns an error if any occurs.
+//
+// Example usage:
+//
+// ncp := NewNatsConnProxy(nc, subject, connPool)
+// err := ncp.Start(ctx)
 type NatsConnProxy struct {
 	nc       *nats.Conn
 	subject  string
 	connPool NetConnManager
+
+	stopHandler func()
 }
 
 // NewNatsConnProxy creates a new NatsConnProxy with the provided NATS connection, subject, and connection pool.
@@ -34,18 +44,12 @@ type NatsConnProxy struct {
 // Returns:
 // - *NatsConnProxy: The created NatsConnProxy instance.
 func NewNatsConnProxy(nc *nats.Conn, subject string, connPool NetConnManager) *NatsConnProxy {
-	return &NatsConnProxy{
-		nc:       nc,
-		subject:  subject,
-		connPool: connPool,
+	ncp := &NatsConnProxy{nc: nc, subject: subject, connPool: connPool}
+	if connPool == nil {
+		ncp.connPool = NewNetConnPullManager(DefaultDial)
+		ncp.stopHandler = func() { _ = connPool.Close() }
 	}
-}
-
-// NewNatsConnProxyWithDefaultConnManager creates a new NatsConnProxy with the provided NATS connection and subject, using the default connection manager.
-// The NatsConnProxy is responsible for handling read and write requests from NATS messages and forwarding them to the corresponding network connections.
-func NewNatsConnProxyWithDefaultConnManager(nc *nats.Conn, subject string) *NatsConnProxy {
-	pm := NewNetConnPullManager(DefaultDial)
-	return NewNatsConnProxy(nc, subject, pm)
+	return ncp
 }
 
 // Start starts the NatsConnProxy instance by subscribing to NATS messages for read and write requests and handling them.
@@ -68,6 +72,9 @@ func (ncp NatsConnProxy) Start(ctx context.Context) error {
 		<-ctx.Done()
 		_ = readSub.Unsubscribe()
 		_ = writeSub.Unsubscribe()
+		if ncp.stopHandler != nil {
+			ncp.stopHandler()
+		}
 	}()
 	return nil
 }
@@ -145,9 +152,4 @@ func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 		return
 	}
 	_ = msg.Respond([]byte(strconv.Itoa(n)))
-}
-
-// Close closes the NatsConnProxy instance by closing the connection pool.
-func (ncp NatsConnProxy) Close() error {
-	return ncp.connPool.Close()
 }

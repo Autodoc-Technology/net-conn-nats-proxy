@@ -37,8 +37,6 @@ func main() {
 	//pm := rnp.NewNetConnPullManager(rnp.DefaultDial)
 	// Create a proxy with the custom pull manager
 	proxy := rnp.NewNatsConnProxy(nc, "proxy-redis", pm)
-	// Create a proxy with the default pull manager
-	//proxy := redis_nats_proxy.NewNatsConnProxyWithDefaultConnManager(nc, "proxy-redis")
 	go func() {
 		if err := proxy.Start(ctx); err != nil {
 			slog.Error("start proxy", "err", err)
