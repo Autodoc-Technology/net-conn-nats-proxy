@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"time"
 )
 
 func main() {
@@ -43,18 +44,24 @@ func main() {
 	}
 
 	redisOptions := &redis.UniversalOptions{
+		// to connect to a Redis cluster, provide more than one address or use the following hack []string{addr, addr}
 		Addrs:    []string{addr},
 		Password: password,
-		// This is the IMPORTANT part of using the NATS proxy connection pool. If the value is more than 1, it will work WITH ERRORS.
+		// This is the IMPORTANT part of using the NATS proxy connection pool.
+		// To prevent errors, set the pool size to 1
 		PoolSize: 1,
+		// To prevent Redis Cluster errors, also disable the following options
+		//RouteRandomly:  false,
+		//RouteByLatency: false,
 		Dialer: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			tcpAddr, err := net.ResolveTCPAddr(network, addr)
 			if err != nil {
 				return nil, err
 			}
 			slog.Debug("new connection", "addr", tcpAddr.String())
-			var netConn net.Conn = rnp.NewNatsNetConn(nc, "netconn", tcpAddr)
-			netConn = rnp.NewDebugLogNetConn(netConn)
+			var netConn net.Conn = rnp.NewNatsNetConn(nc, "proxy-redis", tcpAddr)
+			// to log the connection, use the following line
+			//netConn = rnp.NewDebugLogNetConn(netConn)
 			return netConn, nil
 		},
 	}
@@ -65,21 +72,22 @@ func main() {
 		}
 	}(rc)
 
+	now := time.Now()
 	result, err := rc.Ping(ctx).Result()
 	if err != nil {
 		slog.Error("ping redis", "err", err)
 		return
 	}
-	slog.Info("ping redis", "result", result)
+	slog.Info("ping redis", "result", result, "duration", time.Since(now))
 
 	doRequest := func(i int) {
 		key := fmt.Sprintf("key-%d", i)
 		s, err := rc.Get(ctx, key).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
-			slog.Error("get", "key", key, "err", err)
+			slog.Error("get", "key", key, "err", err, "duration", time.Since(now))
 			return
 		}
-		slog.Info("get", "key", key, "value", s)
+		slog.Info("get", "key", key, "value", s, "duration", time.Since(now))
 	}
 
 	var wg sync.WaitGroup

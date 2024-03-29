@@ -33,21 +33,14 @@ func main() {
 		return rnp.NewDebugLogNetConn(conn), nil
 	}
 	pm := rnp.NewNetConnPullManager(dialFunc)
-	// Simplest way to create a pull manager
+	// To create a pool with the default Dial function use the following argument rnp.DefaultDial
 	//pm := rnp.NewNetConnPullManager(rnp.DefaultDial)
-	defer func(pm *rnp.NetConnPullManager) {
-		err := pm.Close()
-		if err != nil {
-			slog.Error("close pull manager", "err", err)
-		}
-	}(pm)
 	// Create a proxy with the custom pull manager
-	proxy := rnp.NewNatsConnProxy(nc, "netconn", pm)
+	proxy := rnp.NewNatsConnProxy(nc, "proxy-redis", pm)
 	// Create a proxy with the default pull manager
-	//proxy := redis_nats_proxy.NewNatsConnProxyWithDefaultConnManager(nc, "netconn")
+	//proxy := redis_nats_proxy.NewNatsConnProxyWithDefaultConnManager(nc, "proxy-redis")
 	go func() {
-		err := proxy.Start(ctx)
-		if err != nil {
+		if err := proxy.Start(ctx); err != nil {
 			slog.Error("start proxy", "err", err)
 		}
 	}()

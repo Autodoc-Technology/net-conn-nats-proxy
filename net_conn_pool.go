@@ -3,6 +3,7 @@ package redis_nats_proxy
 import (
 	"fmt"
 	"net"
+	"sync"
 )
 
 // DialFn represents a function that dials a network address.
@@ -13,6 +14,7 @@ var DefaultDial DialFn = net.Dial
 
 // NetConnPullManager represents a pool manager for network connections.
 type NetConnPullManager struct {
+	mu   sync.Mutex
 	pool map[string]connEnvelop
 	dial DialFn
 }
@@ -37,6 +39,9 @@ func NewNetConnPullManager(fn DialFn) *NetConnPullManager {
 // Otherwise, the newly created connection is added to the pool using the generated key,
 // and the connection along with a nil error is returned.
 func (cp *NetConnPullManager) Get(addr *net.TCPAddr) (net.Conn, error) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+
 	key := addr.String()
 	cEnv, ok := cp.pool[key]
 	if ok {
@@ -67,6 +72,8 @@ func (cp *NetConnPullManager) Close() error {
 
 // delete removes a connection from the NetConnPullManager pool based on the given key.
 func (cp *NetConnPullManager) delete(key string) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
 	delete(cp.pool, key)
 }
 
