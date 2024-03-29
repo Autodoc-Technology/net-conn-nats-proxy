@@ -30,21 +30,29 @@ func NewNatsNetConn(nc *nats.Conn, subject string, addr *net.TCPAddr) *NatsNetCo
 }
 
 const (
-	natsNetworkHeaderKey  = "network"
-	natsAddrHeaderKey     = "addr"
-	natsErrHeaderKey      = "err"
-	natsReadSizeHeaderKey = "read-size"
+	natsNetworkHeaderKey       = "network"
+	natsAddrHeaderKey          = "addr"
+	natsErrHeaderKey           = "err"
+	natsReadSizeHeaderKey      = "read-size"
+	natsReadDeadlineHeaderKey  = "read-deadline"
+	natsWriteDeadlineHeaderKey = "write-deadline"
 )
 
 const readSuffix = ".read"
 
 // Read reads data from the underlying nats.Conn into the provided byte slice.
 func (c *NatsNetConn) Read(b []byte) (n int, err error) {
-	rd := c.readDeadline().Sub(time.Now())
 	newMsg := nats.NewMsg(c.subject + readSuffix)
 	newMsg.Header.Set(natsReadSizeHeaderKey, fmt.Sprintf("%d", len(b)))
 	newMsg.Header.Set(natsNetworkHeaderKey, c.addr.Network())
 	newMsg.Header.Set(natsAddrHeaderKey, c.addr.String())
+	strReadDeadline, err := SerializeTimeToString(c.readDeadLine)
+	if err != nil {
+		return 0, fmt.Errorf("serialize read deadline: %w", err)
+	}
+	newMsg.Header.Set(natsReadDeadlineHeaderKey, string(strReadDeadline))
+
+	rd := time.Until(c.readDeadline())
 	msg, err := c.nc.RequestMsg(newMsg, rd)
 	if err != nil {
 		return 0, fmt.Errorf("nats request: %w", err)
@@ -64,11 +72,17 @@ const writeSuffix = ".write"
 
 // Write writes the provided byte slice to the underlying nats.Conn.
 func (c *NatsNetConn) Write(b []byte) (n int, err error) {
-	rd := c.writeDeadline().Sub(time.Now())
 	newMsg := nats.NewMsg(c.subject + writeSuffix)
 	newMsg.Header.Set(natsNetworkHeaderKey, c.addr.Network())
 	newMsg.Header.Set(natsAddrHeaderKey, c.addr.String())
+	strWriteDeadline, err := SerializeTimeToString(c.writeDeadLine)
+	if err != nil {
+		return 0, fmt.Errorf("serialize write deadline: %w", err)
+	}
+	newMsg.Header.Set(natsWriteDeadlineHeaderKey, string(strWriteDeadline))
 	newMsg.Data = slices.Clone(b)
+
+	rd := time.Until(c.writeDeadline())
 	msg, err := c.nc.RequestMsg(newMsg, rd)
 	if err != nil {
 		return 0, fmt.Errorf("nats request: %w", err)

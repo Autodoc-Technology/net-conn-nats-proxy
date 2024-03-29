@@ -8,6 +8,26 @@ import (
 	"time"
 )
 
+// DebugLogger is an interface that defines a method for logging debug messages.
+// The Debug method takes a message string and optional variadic arguments and logs the debug message.
+// Example usage:
+// debug := defaultDebugLogger
+// debug.Debug("This is a debug message")
+// debug.Debug("This is a debug message with arguments, "arg1", 42, "arg2", "foo")
+type DebugLogger interface {
+	Debug(msg string, args ...any)
+}
+
+// DebugLoggerFunc represents a function type that can be used as a debug logger.
+// The DebugLoggerFunc type takes a message string and optional variadic arguments and logs the debug message.
+type DebugLoggerFunc func(msg string, args ...any)
+
+// Debug prints the debug message using the specified DebugLoggerFunc.
+// The message and any additional arguments are passed to the DebugLoggerFunc as arguments.
+func (d DebugLoggerFunc) Debug(msg string, args ...any) {
+	d(msg, args...)
+}
+
 // `_` is a variable of type `net.Conn` that is assigned the address of a `DebugLogNetConn` object.
 // `DebugLogNetConn` is a type that implements the `net.Conn` interface, providing methods for reading, writing, closing, and managing deadlines on network connections.
 // The `Read` method reads data from the underlying connection, while logging debug information before and after the read operation.
@@ -24,6 +44,7 @@ var _ net.Conn = &DebugLogNetConn{}
 // Read reads data from the connection and logs the bytes read and the length of the buffer.
 type DebugLogNetConn struct {
 	conn net.Conn
+	log  DebugLogger
 }
 
 // NewDebugLogNetConn returns a new DebugLogNetConn instance.
@@ -31,7 +52,12 @@ type DebugLogNetConn struct {
 // Write, Close, LocalAddr, RemoteAddr, SetDeadline,
 // SetReadDeadline, and SetWriteDeadline methods.
 func NewDebugLogNetConn(conn net.Conn) *DebugLogNetConn {
-	return &DebugLogNetConn{conn: conn}
+	return &DebugLogNetConn{conn: conn, log: slog.Default()}
+}
+
+// NewDebugCustomLogNetConn returns a new DebugLogNetConn instance with the provided debug logger.
+func NewDebugCustomLogNetConn(conn net.Conn, log DebugLogger) *DebugLogNetConn {
+	return &DebugLogNetConn{conn: conn, log: log}
 }
 
 // Read reads data from the underlying net.Conn into the provided byte slice.
@@ -42,7 +68,7 @@ func (lc *DebugLogNetConn) Read(b []byte) (n int, err error) {
 	}
 
 	bb := slices.Compact(slices.Clone(b))
-	defer slog.Debug("read", "bytes", bb, "len", len(b))
+	defer lc.log.Debug("read", slog.String("bytes", string(bb)), slog.Int("len", len(b)))
 	return read, nil
 }
 
@@ -51,13 +77,13 @@ func (lc *DebugLogNetConn) Read(b []byte) (n int, err error) {
 // After writing, debug logging is performed, including the number of bytes written and the length of the original byte slice.
 func (lc *DebugLogNetConn) Write(b []byte) (n int, err error) {
 	bb := slices.Compact(slices.Clone(b))
-	defer slog.Debug("write", "bytes", bb, "len", len(b))
+	defer lc.log.Debug("write", slog.String("bytes", string(bb)), slog.Int("len", len(b)))
 	return lc.conn.Write(b)
 }
 
 // Close closes the underlying net.Conn and logs a debug message.
 func (lc *DebugLogNetConn) Close() error {
-	defer slog.Debug("close connection")
+	defer lc.log.Debug("close connection")
 	return lc.conn.Close()
 }
 
@@ -79,7 +105,7 @@ func (lc *DebugLogNetConn) RemoteAddr() net.Addr {
 //
 // This method returns an error if the net.Conn implementation returns an error when setting the deadline.
 func (lc *DebugLogNetConn) SetDeadline(t time.Time) error {
-	defer slog.Debug("deadline", "time", t, "diff", t.Sub(time.Now()))
+	defer lc.log.Debug("deadline", slog.Time("time", t), slog.Duration("diff", time.Until(t)))
 	return lc.conn.SetDeadline(t)
 }
 
@@ -88,7 +114,7 @@ func (lc *DebugLogNetConn) SetDeadline(t time.Time) error {
 // The time difference between the specified time and the current time is logged.
 // It returns an error if there was an error while setting the read deadline.
 func (lc *DebugLogNetConn) SetReadDeadline(t time.Time) error {
-	defer slog.Debug("read deadline", "time", t, "diff", time.Until(t))
+	defer lc.log.Debug("read deadline", slog.Time("time", t), slog.Duration("diff", time.Until(t)))
 	return lc.conn.SetReadDeadline(t)
 }
 
@@ -97,6 +123,6 @@ func (lc *DebugLogNetConn) SetReadDeadline(t time.Time) error {
 // After the deadline, any write operation will fail with a timeout error.
 // The difference between the current time and the deadline time is logged using slog.Debug.
 func (lc *DebugLogNetConn) SetWriteDeadline(t time.Time) error {
-	defer slog.Debug("write deadline", "time", t, "diff", time.Until(t))
+	defer lc.log.Debug("write deadline", slog.Time("time", t), slog.Duration("diff", time.Until(t)))
 	return lc.conn.SetWriteDeadline(t)
 }

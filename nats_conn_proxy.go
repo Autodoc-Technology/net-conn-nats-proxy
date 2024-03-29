@@ -76,6 +76,7 @@ func (ncp NatsConnProxy) readHandler(msg *nats.Msg) {
 	network := msg.Header.Get(natsNetworkHeaderKey)
 	addr := msg.Header.Get(natsAddrHeaderKey)
 	readSize := msg.Header.Get(natsReadSizeHeaderKey)
+	rdls := msg.Header.Get(natsReadDeadlineHeaderKey)
 
 	tcpAddr, err := net.ResolveTCPAddr(network, addr)
 	if err != nil {
@@ -98,6 +99,9 @@ func (ncp NatsConnProxy) readHandler(msg *nats.Msg) {
 		return
 	}
 	buf := make([]byte, bufSize)
+	if readDeadline, err := DeserializeTimeFromString(rdls); err == nil && !readDeadline.IsZero() {
+		_ = conn.SetReadDeadline(readDeadline)
+	}
 	n, err := conn.Read(buf)
 	if err != nil {
 		msg.Header.Set(natsErrHeaderKey, err.Error())
@@ -114,6 +118,7 @@ var zeroLenStr = []byte("0")
 func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 	network := msg.Header.Get(natsNetworkHeaderKey)
 	addr := msg.Header.Get(natsAddrHeaderKey)
+	wdls := msg.Header.Get(natsWriteDeadlineHeaderKey)
 
 	tcpAddr, err := net.ResolveTCPAddr(network, addr)
 	if err != nil {
@@ -129,6 +134,9 @@ func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 		return
 	}
 
+	if writeDeadline, err := DeserializeTimeFromString(wdls); err == nil && !writeDeadline.IsZero() {
+		_ = conn.SetWriteDeadline(writeDeadline)
+	}
 	n, err := conn.Write(msg.Data)
 	if err != nil {
 		msg.Header.Set(natsErrHeaderKey, err.Error())
@@ -136,4 +144,9 @@ func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 		return
 	}
 	_ = msg.Respond([]byte(strconv.Itoa(n)))
+}
+
+// Close closes the NatsConnProxy instance by closing the connection pool.
+func (ncp NatsConnProxy) Close() error {
+	return ncp.connPool.Close()
 }
