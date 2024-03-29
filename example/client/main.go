@@ -86,9 +86,10 @@ func main() {
 	cnt := 10
 	wg.Add(cnt)
 	for i := 0; i < 10; i++ {
+		i := i
 		go func() {
 			defer wg.Done()
-			doRequest(i) // it is safe in Go 1.22+
+			doRequest(i)
 		}()
 	}
 	wg.Wait()
