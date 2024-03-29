@@ -44,7 +44,8 @@ func NewNatsConnProxy(nc *nats.Conn, subject string, connPool NetConnManager) *N
 // NewNatsConnProxyWithDefaultConnManager creates a new NatsConnProxy with the provided NATS connection and subject, using the default connection manager.
 // The NatsConnProxy is responsible for handling read and write requests from NATS messages and forwarding them to the corresponding network connections.
 func NewNatsConnProxyWithDefaultConnManager(nc *nats.Conn, subject string) *NatsConnProxy {
-	return &NatsConnProxy{nc: nc, subject: subject, connPool: NewNetConnPullManager(DefaultDial)}
+	pm := NewNetConnPullManager(DefaultDial)
+	return NewNatsConnProxy(nc, subject, pm)
 }
 
 // Start starts the NatsConnProxy instance by subscribing to NATS messages for read and write requests and handling them.

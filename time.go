@@ -11,7 +11,7 @@ func SerializeTimeToString(t time.Time) (string, error) {
 	var b bytes.Buffer
 	enc := gob.NewEncoder(&b)
 	err := enc.Encode(t)
-	return string(b.Bytes()), err
+	return b.String(), err
 }
 
 // DeserializeTimeFromString deserializes a string back to time.Time using encoding/gob
