@@ -47,7 +47,7 @@ func NewNatsConnProxy(nc *nats.Conn, subject string, connPool NetConnManager) *N
 	ncp := &NatsConnProxy{nc: nc, subject: subject, connPool: connPool}
 	if connPool == nil {
 		ncp.connPool = NewNetConnPullManager(DefaultDial)
-		ncp.stopHandler = func() { _ = connPool.Close() }
+		ncp.stopHandler = func() { _ = ncp.connPool.Close() }
 	}
 	return ncp
 }
