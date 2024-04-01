@@ -2,9 +2,42 @@ package redis_nats_proxy
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync"
 )
+
+// getOptions represents a struct for Get function options.
+type getOptions struct {
+	uuid string
+}
+
+// GetOption represents a function type for setting Get function options.
+type GetOption func(*getOptions)
+
+func newGetOptions(options ...GetOption) *getOptions {
+	// create a default options instance
+	opts := &getOptions{}
+	// apply the options
+	for _, opt := range options {
+		opt(opts)
+	}
+	return opts
+}
+
+// WithUUID sets the UUID option for the Get function.
+func WithUUID(uuid string) GetOption {
+	return func(o *getOptions) {
+		o.uuid = uuid
+	}
+}
+
+// NetConnManager represents an interface for managing network connections.
+type NetConnManager interface {
+	io.Closer
+	// Get returns a connection from the pool or creates a new one.
+	Get(addr *net.TCPAddr, options ...GetOption) (net.Conn, error)
+}
 
 // DialFn represents a function that dials a network address.
 type DialFn func(network, addr string) (net.Conn, error)
@@ -38,11 +71,13 @@ func NewNetConnPullManager(fn DialFn) *NetConnPullManager {
 // If an error occurs while dialing, an error is returned with a formatted message.
 // Otherwise, the newly created connection is added to the pool using the generated key,
 // and the connection along with a nil error is returned.
-func (cp *NetConnPullManager) Get(addr *net.TCPAddr) (net.Conn, error) {
+func (cp *NetConnPullManager) Get(addr *net.TCPAddr, options ...GetOption) (net.Conn, error) {
+	opts := newGetOptions(options...)
+
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
-	key := addr.String()
+	key := cp.generateKey(addr, opts.uuid)
 	cEnv, ok := cp.pool[key]
 	if ok {
 		return cEnv, nil
@@ -52,7 +87,7 @@ func (cp *NetConnPullManager) Get(addr *net.TCPAddr) (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial: %w", err)
 	}
-	cp.pool[key] = connEnvelop{Conn: conn, pm: cp}
+	cp.pool[key] = connEnvelop{Conn: conn, pm: cp, key: key}
 	return conn, nil
 }
 
@@ -77,14 +112,20 @@ func (cp *NetConnPullManager) delete(key string) {
 	delete(cp.pool, key)
 }
 
+// generateKey generates a key for a connection based on the address and UUID.
+func (cp *NetConnPullManager) generateKey(addr *net.TCPAddr, uuid string) string {
+	return fmt.Sprintf("%s-%s", addr.String(), uuid)
+}
+
 // connEnvelop represents a connection envelop that wraps a net.Conn instance and a NetConnPullManager pointer.
 type connEnvelop struct {
 	net.Conn
-	pm *NetConnPullManager
+	pm  *NetConnPullManager
+	key string
 }
 
 // Close closes the connection and removes it from the NetConnPullManager pool.
 func (ce connEnvelop) Close() error {
-	ce.pm.delete(ce.Conn.RemoteAddr().String())
+	ce.pm.delete(ce.key)
 	return ce.Conn.Close()
 }
