@@ -107,8 +107,7 @@ func (c *NatsNetConn) Close() error {
 	newMsg.Header.Set(addrHeaderKey, c.addr.String())
 	newMsg.Header.Set(connectionUUIDHeaderKey, c.uuid)
 
-	rd := time.Until(c.writeDeadline())
-	msg, err := c.nc.RequestMsg(newMsg, rd)
+	msg, err := c.nc.RequestMsg(newMsg, time.Second)
 	if err != nil {
 		return fmt.Errorf("nats request: %w", err)
 	}
