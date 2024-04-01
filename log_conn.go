@@ -83,7 +83,7 @@ func (lc *DebugLogNetConn) Write(b []byte) (n int, err error) {
 
 // Close closes the underlying net.Conn and logs a debug message.
 func (lc *DebugLogNetConn) Close() error {
-	defer lc.log.Debug("close connection")
+	defer lc.log.Debug("close connection", slog.String("remote", lc.conn.RemoteAddr().String()))
 	return lc.conn.Close()
 }
 

@@ -59,7 +59,11 @@ func main() {
 				return nil, err
 			}
 			slog.Debug("new connection", "addr", tcpAddr.String())
-			var netConn net.Conn = rnp.NewNatsNetConn(nc, "proxy-redis", tcpAddr)
+			var netConn net.Conn
+			netConn, err = rnp.NewNatsNetConn(nc, "proxy-redis", tcpAddr)
+			if err != nil {
+				return nil, err
+			}
 			// to log the connection, use the following line
 			//netConn = rnp.NewDebugLogNetConn(netConn)
 			return netConn, nil

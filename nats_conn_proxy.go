@@ -3,17 +3,10 @@ package redis_nats_proxy
 import (
 	"context"
 	"github.com/nats-io/nats.go"
-	"io"
 	"net"
 	"strconv"
+	"time"
 )
-
-// NetConnManager represents an interface for managing network connections.
-type NetConnManager interface {
-	io.Closer
-	// Get returns a connection from the pool or creates a new one.
-	Get(addr *net.TCPAddr) (net.Conn, error)
-}
 
 // NatsConnProxy represents a proxy for NATS connections.
 // It is responsible for handling read and write requests from NATS messages and forwarding them to the appropriate network connections.
@@ -81,38 +74,39 @@ func (ncp NatsConnProxy) Start(ctx context.Context) error {
 
 // readHandler handles read requests from NATS messages by reading data from the network connection and responding with the read data.
 func (ncp NatsConnProxy) readHandler(msg *nats.Msg) {
-	network := msg.Header.Get(natsNetworkHeaderKey)
-	addr := msg.Header.Get(natsAddrHeaderKey)
-	readSize := msg.Header.Get(natsReadSizeHeaderKey)
-	rdls := msg.Header.Get(natsReadDeadlineHeaderKey)
+	network := msg.Header.Get(networkHeaderKey)
+	addr := msg.Header.Get(addrHeaderKey)
+	readSize := msg.Header.Get(readSizeHeaderKey)
+	rdls := msg.Header.Get(readDeadlineHeaderKey)
+	uuid := msg.Header.Get(connectionUUIDHeaderKey)
 
 	tcpAddr, err := net.ResolveTCPAddr(network, addr)
 	if err != nil {
-		msg.Header.Set(natsErrHeaderKey, err.Error())
+		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(nil)
 		return
 	}
 
-	conn, err := ncp.connPool.Get(tcpAddr)
+	conn, err := ncp.connPool.Get(tcpAddr, WithUUID(uuid))
 	if err != nil {
-		msg.Header.Set(natsErrHeaderKey, err.Error())
+		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(nil)
 		return
 	}
 
 	bufSize, err := strconv.Atoi(readSize)
 	if err != nil {
-		msg.Header.Set(natsErrHeaderKey, err.Error())
+		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(nil)
 		return
 	}
 	buf := make([]byte, bufSize)
-	if readDeadline, err := DeserializeTimeFromString(rdls); err == nil && !readDeadline.IsZero() {
+	if readDeadline, err := time.Parse(time.RFC3339Nano, rdls); err == nil && !readDeadline.IsZero() {
 		_ = conn.SetReadDeadline(readDeadline)
 	}
 	n, err := conn.Read(buf)
 	if err != nil {
-		msg.Header.Set(natsErrHeaderKey, err.Error())
+		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(nil)
 		return
 	}
@@ -124,30 +118,31 @@ var zeroLenStr = []byte("0")
 
 // writeHandler handles write requests from NATS messages by writing data to the network connection and responding with the number of bytes written.
 func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
-	network := msg.Header.Get(natsNetworkHeaderKey)
-	addr := msg.Header.Get(natsAddrHeaderKey)
-	wdls := msg.Header.Get(natsWriteDeadlineHeaderKey)
+	network := msg.Header.Get(networkHeaderKey)
+	addr := msg.Header.Get(addrHeaderKey)
+	wdls := msg.Header.Get(writeDeadlineHeaderKey)
+	uuid := msg.Header.Get(connectionUUIDHeaderKey)
 
 	tcpAddr, err := net.ResolveTCPAddr(network, addr)
 	if err != nil {
-		msg.Header.Set(natsErrHeaderKey, err.Error())
+		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(zeroLenStr)
 		return
 	}
 
-	conn, err := ncp.connPool.Get(tcpAddr)
+	conn, err := ncp.connPool.Get(tcpAddr, WithUUID(uuid))
 	if err != nil {
-		msg.Header.Set(natsErrHeaderKey, err.Error())
+		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(zeroLenStr)
 		return
 	}
 
-	if writeDeadline, err := DeserializeTimeFromString(wdls); err == nil && !writeDeadline.IsZero() {
+	if writeDeadline, err := time.Parse(time.RFC3339Nano, wdls); err == nil && !writeDeadline.IsZero() {
 		_ = conn.SetWriteDeadline(writeDeadline)
 	}
 	n, err := conn.Write(msg.Data)
 	if err != nil {
-		msg.Header.Set(natsErrHeaderKey, err.Error())
+		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(zeroLenStr)
 		return
 	}
