@@ -99,7 +99,23 @@ func (c *NatsNetConn) Write(b []byte) (n int, err error) {
 	return wl, nil
 }
 
+const closeSuffix = ".close"
+
 func (c *NatsNetConn) Close() error {
+	newMsg := nats.NewMsg(c.subject + closeSuffix)
+	newMsg.Header.Set(networkHeaderKey, c.addr.Network())
+	newMsg.Header.Set(addrHeaderKey, c.addr.String())
+	newMsg.Header.Set(connectionUUIDHeaderKey, c.uuid)
+
+	rd := time.Until(c.writeDeadline())
+	msg, err := c.nc.RequestMsg(newMsg, rd)
+	if err != nil {
+		return fmt.Errorf("nats request: %w", err)
+	}
+	msgErr := msg.Header.Get(errHeaderKey)
+	if msgErr != "" {
+		return fmt.Errorf("nats error: %s", msgErr)
+	}
 	return nil
 }
 

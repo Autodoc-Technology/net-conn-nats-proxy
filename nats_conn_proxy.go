@@ -61,10 +61,15 @@ func (ncp NatsConnProxy) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	closeSub, err := ncp.nc.Subscribe(ncp.subject+closeSuffix, ncp.closeHandler)
+	if err != nil {
+		return err
+	}
 	go func() {
 		<-ctx.Done()
 		_ = readSub.Unsubscribe()
 		_ = writeSub.Unsubscribe()
+		_ = closeSub.Unsubscribe()
 		if ncp.stopHandler != nil {
 			ncp.stopHandler()
 		}
@@ -80,14 +85,7 @@ func (ncp NatsConnProxy) readHandler(msg *nats.Msg) {
 	rdls := msg.Header.Get(readDeadlineHeaderKey)
 	uuid := msg.Header.Get(connectionUUIDHeaderKey)
 
-	tcpAddr, err := net.ResolveTCPAddr(network, addr)
-	if err != nil {
-		msg.Header.Set(errHeaderKey, err.Error())
-		_ = msg.Respond(nil)
-		return
-	}
-
-	conn, err := ncp.connPool.Get(tcpAddr, WithUUID(uuid))
+	conn, err := ncp.getNetConn(network, addr, uuid)
 	if err != nil {
 		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(nil)
@@ -123,14 +121,7 @@ func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 	wdls := msg.Header.Get(writeDeadlineHeaderKey)
 	uuid := msg.Header.Get(connectionUUIDHeaderKey)
 
-	tcpAddr, err := net.ResolveTCPAddr(network, addr)
-	if err != nil {
-		msg.Header.Set(errHeaderKey, err.Error())
-		_ = msg.Respond(zeroLenStr)
-		return
-	}
-
-	conn, err := ncp.connPool.Get(tcpAddr, WithUUID(uuid))
+	conn, err := ncp.getNetConn(network, addr, uuid)
 	if err != nil {
 		msg.Header.Set(errHeaderKey, err.Error())
 		_ = msg.Respond(zeroLenStr)
@@ -147,4 +138,33 @@ func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 		return
 	}
 	_ = msg.Respond([]byte(strconv.Itoa(n)))
+}
+
+func (ncp NatsConnProxy) closeHandler(msg *nats.Msg) {
+	network := msg.Header.Get(networkHeaderKey)
+	addr := msg.Header.Get(addrHeaderKey)
+	uuid := msg.Header.Get(connectionUUIDHeaderKey)
+
+	conn, err := ncp.getNetConn(network, addr, uuid)
+	if err != nil {
+		msg.Header.Set(errHeaderKey, err.Error())
+		_ = msg.Respond(nil)
+		return
+	}
+
+	if err = conn.Close(); err != nil {
+		msg.Header.Set(errHeaderKey, err.Error())
+		_ = msg.Respond(nil)
+		return
+	}
+	_ = msg.Respond(nil)
+}
+
+// getNetConn returns a net.Conn by resolving the TCP address and calling the Get method of the connPool with the specified UUID options.
+func (ncp NatsConnProxy) getNetConn(network, addr, uuid string) (net.Conn, error) {
+	tcpAddr, err := net.ResolveTCPAddr(network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return ncp.connPool.Get(tcpAddr, WithUUID(uuid))
 }
