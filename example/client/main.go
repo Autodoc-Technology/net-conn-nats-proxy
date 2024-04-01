@@ -47,10 +47,7 @@ func main() {
 		// to connect to a Redis cluster, provide more than one address or use the following hack []string{addr, addr}
 		Addrs:    []string{addr},
 		Password: password,
-		// This is the IMPORTANT part of using the NATS proxy connection pool.
-		// To prevent errors, set the pool size to 1
-		PoolSize: 1,
-		// To prevent Redis Cluster errors, also disable the following options
+		// To prevent Redis Cluster errors, disable the following options
 		//RouteRandomly:  false,
 		//RouteByLatency: false,
 		Dialer: func(ctx context.Context, network, addr string) (net.Conn, error) {
