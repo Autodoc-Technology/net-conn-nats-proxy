@@ -1,4 +1,4 @@
-module github.com/Autodoc-Technology/redis-nats-proxy
+module github.com/Autodoc-Technology/net-conn-nats-proxy
 
 go 1.21
 
