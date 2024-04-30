@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	rnp "github.com/Autodoc-Technology/redis-nats-proxy"
+	rnp "github.com/Autodoc-Technology/net-conn-nats-proxy"
 	"github.com/nats-io/nats.go"
 	"log/slog"
 	"net"

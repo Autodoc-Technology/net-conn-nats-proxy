@@ -1,4 +1,4 @@
-package redis_nats_proxy
+package net_conn_nats_proxy
 
 import (
 	"fmt"

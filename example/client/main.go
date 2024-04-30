@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	rnp "github.com/Autodoc-Technology/redis-nats-proxy"
+	rnp "github.com/Autodoc-Technology/net-conn-nats-proxy"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"log/slog"
