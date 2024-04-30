@@ -1,29 +1,12 @@
-# Redis-NATS-Proxy
+# net.Conn NATS Proxy
 
-Redis universal client proxy powered by NATS transport.
+net.Conn client proxy powered by NATS transport.
 
 ## Description
 
-This project is a Redis client proxy that uses NATS as a transport layer.
-It is written in Go and uses the `go.mod` for managing dependencies.
+This is a simple net.Conn proxy that forwards all traffic to a NATS server. It is designed to be used as a client proxy
+for a NATS server. It is not a full NATS client, but a simple net.Conn proxy.
 
-## Getting Started
+## Usage
 
-### Dependencies
-
-- Go
-- NATS
-- Redis
-
-### Installing
-
-- Clone the repository
-- Run `go mod download` to download the necessary dependencies
-
-### Executing program
-
-- Look at the example folder
-
-## Help
-
-Any advise for common problems or issues.
+Look at the `example` directory for a simple example of how to use this package.
