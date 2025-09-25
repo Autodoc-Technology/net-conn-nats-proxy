@@ -2,10 +2,11 @@ package net_conn_nats_proxy
 
 import (
 	"context"
-	"github.com/nats-io/nats.go"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/nats-io/nats.go"
 )
 
 // NatsConnProxy represents a proxy for NATS connections.
@@ -77,13 +78,18 @@ func (ncp NatsConnProxy) Start(ctx context.Context) error {
 	return nil
 }
 
-// readHandler handles read requests from NATS messages by reading data from the network connection and responding with the read data.
+// readHandler processes a read request from a NATS message and retrieves data from the corresponding network connection.
 func (ncp NatsConnProxy) readHandler(msg *nats.Msg) {
 	network := msg.Header.Get(networkHeaderKey)
 	addr := msg.Header.Get(addrHeaderKey)
 	readSize := msg.Header.Get(readSizeHeaderKey)
 	rdls := msg.Header.Get(readDeadlineHeaderKey)
 	uuid := msg.Header.Get(connectionUUIDHeaderKey)
+
+	// check msg.Header nil
+	if msg.Header == nil {
+		msg.Header = nats.Header{}
+	}
 
 	conn, err := ncp.getNetConn(network, addr, uuid)
 	if err != nil {
@@ -114,12 +120,17 @@ func (ncp NatsConnProxy) readHandler(msg *nats.Msg) {
 // zeroLenStr represents a byte array containing the value "0".
 var zeroLenStr = []byte("0")
 
-// writeHandler handles write requests from NATS messages by writing data to the network connection and responding with the number of bytes written.
+// writeHandler handles write requests by sending data from the message to the referenced network connection.
 func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 	network := msg.Header.Get(networkHeaderKey)
 	addr := msg.Header.Get(addrHeaderKey)
 	wdls := msg.Header.Get(writeDeadlineHeaderKey)
 	uuid := msg.Header.Get(connectionUUIDHeaderKey)
+
+	// check msg.Header nil
+	if msg.Header == nil {
+		msg.Header = nats.Header{}
+	}
 
 	conn, err := ncp.getNetConn(network, addr, uuid)
 	if err != nil {
@@ -140,10 +151,16 @@ func (ncp NatsConnProxy) writeHandler(msg *nats.Msg) {
 	_ = msg.Respond([]byte(strconv.Itoa(n)))
 }
 
+// closeHandler handles NATS messages to close a network connection identified by the network, address, and UUID headers.
 func (ncp NatsConnProxy) closeHandler(msg *nats.Msg) {
 	network := msg.Header.Get(networkHeaderKey)
 	addr := msg.Header.Get(addrHeaderKey)
 	uuid := msg.Header.Get(connectionUUIDHeaderKey)
+
+	// check msg.Header nil
+	if msg.Header == nil {
+		msg.Header = nats.Header{}
+	}
 
 	conn, err := ncp.getNetConn(network, addr, uuid)
 	if err != nil {
