@@ -51,13 +51,11 @@ func main() {
 		//RouteRandomly:  false,
 		//RouteByLatency: false,
 		Dialer: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			tcpAddr, err := net.ResolveTCPAddr(network, addr)
-			if err != nil {
-				return nil, err
-			}
-			slog.Debug("new connection", "addr", tcpAddr.String())
-			var netConn net.Conn
-			netConn, err = rnp.NewNatsNetConn(nc, "proxy-redis", tcpAddr)
+			// Pass the address as-is so the proxy server resolves it.
+			// This supports cluster-internal hostnames that the client cannot resolve,
+			// as well as plain IP addresses (handled transparently server-side).
+			slog.Debug("new connection", "network", network, "addr", addr)
+			netConn, err := rnp.NewNatsNetConnAddr(nc, "proxy-redis", network, addr)
 			if err != nil {
 				return nil, err
 			}
